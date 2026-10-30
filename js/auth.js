@@ -37,8 +37,32 @@ export function bindAuthScreen(onAuthed) {
     showLoading(true);
     try {
       await auth.signInWithEmailAndPassword(`${username}@jumino.local`, password);
-    } catch {
-      err.textContent = "Username or password isn't right.";
+    } catch (e2) {
+      console.error("[login] Firebase error:", e2?.code, e2?.message);
+      const code = e2?.code || "";
+      let msg;
+      switch (code) {
+        case "auth/user-not-found":
+        case "auth/wrong-password":
+        case "auth/invalid-credential":
+          msg = "Username or password isn't right.";
+          break;
+        case "auth/too-many-requests":
+          msg = "Too many attempts. Try again in a minute.";
+          break;
+        case "auth/network-request-failed":
+          msg = "Network error — check your connection.";
+          break;
+        case "auth/operation-not-allowed":
+          msg = "Email/Password sign-in is not enabled in Firebase.";
+          break;
+        case "auth/invalid-email":
+          msg = "That username isn't valid.";
+          break;
+        default:
+          msg = "Login failed. Check the console for details.";
+      }
+      err.textContent = msg;
     } finally { showLoading(false); }
   };
 
@@ -64,17 +88,51 @@ export function bindAuthScreen(onAuthed) {
           const ref = storage.ref(`avatars/${cred.user.uid}`);
           await ref.put(blob);
           avatarUrl = await ref.getDownloadURL();
-        } catch { toast("Picture upload failed — you can add it later."); }
+        } catch (e3) {
+          console.warn("[signup] avatar upload failed:", e3?.code, e3?.message);
+          toast("Picture upload failed — you can add it later.");
+        }
       }
       const { userDoc } = await import("./firebase.js");
       await userDoc(cred.user.uid).set({
         username, avatarUrl, country: null, createdAt: new Date().toISOString(),
       });
     } catch (e2) {
-      const msg =
-        e2?.code === "auth/email-already-in-use" ? "That username is taken." :
-        e2?.code === "auth/weak-password"        ? "Password is too weak." :
-                                                   "Could not create account.";
+      console.error("[signup] Firebase error:", e2?.code, e2?.message);
+      const code = e2?.code || "";
+      let msg;
+      switch (code) {
+        case "auth/email-already-in-use":
+          msg = "That username is taken. Try another.";
+          break;
+        case "auth/weak-password":
+          msg = "Password is too weak. Use 8+ characters with a number or symbol.";
+          break;
+        case "auth/operation-not-allowed":
+          msg = "Email/Password sign-in is not enabled. Enable it in Firebase Console → Authentication → Sign-in method.";
+          break;
+        case "auth/invalid-email":
+          msg = "That username can't be used. Try letters, numbers or underscores only.";
+          break;
+        case "auth/network-request-failed":
+          msg = "Network error — check your connection and try again.";
+          break;
+        case "auth/too-many-requests":
+          msg = "Too many attempts. Try again in a minute.";
+          break;
+        case "auth/invalid-api-key":
+        case "auth/api-key-not-valid":
+          msg = "Firebase API key is invalid. Check js/config.js.";
+          break;
+        case "auth/unauthorized-domain":
+          msg = "This domain isn't authorized in Firebase Auth settings.";
+          break;
+        case "auth/admin-restricted-operation":
+          msg = "Account creation is disabled for this project.";
+          break;
+        default:
+          msg = "Could not create account. Check the browser console for details.";
+      }
       err.textContent = msg;
     } finally { showLoading(false); }
   };
